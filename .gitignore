@@ -1,0 +1,7 @@
+# Compiled binaries
+*.exe
+/ais
+
+# Scan output / scratch
+out.txt
+stderr.txt
