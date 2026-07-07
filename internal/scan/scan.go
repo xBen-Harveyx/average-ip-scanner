@@ -25,10 +25,11 @@ type Options struct {
 
 	// Injected dependencies. Defaults are applied by Scan when these are nil,
 	// which keeps the package testable without real ARP or DNS.
-	Probe        func(net.IP) (string, bool)     // MAC + liveness; defaults to arpProbe
+	Probe        func(net.IP) (string, bool)                 // MAC + liveness; defaults to arpProbe
 	ResolveHost  func(ctx context.Context, ip string) string // reverse DNS; used when Resolve is true
-	LookupVendor func(mac string) string         // OUI -> manufacturer
-	ProgressOut  io.Writer                       // progress lines; defaults to os.Stderr
+	LookupVendor func(mac string) string                     // OUI -> manufacturer
+	ScanPorts    func(ctx context.Context, ip string) []int  // open-port scan; skipped when nil
+	ProgressOut  io.Writer                                   // progress lines; defaults to os.Stderr
 }
 
 // Scan probes each IP concurrently and returns the hosts that responded to ARP,
@@ -63,6 +64,9 @@ func Scan(ctx context.Context, ips []net.IP, opts Options) []model.Host {
 				}
 				if opts.Resolve && opts.ResolveHost != nil {
 					host.Hostname = opts.ResolveHost(ctx, host.IP)
+				}
+				if opts.ScanPorts != nil {
+					host.OpenPorts = opts.ScanPorts(ctx, host.IP)
 				}
 				results <- host
 			}

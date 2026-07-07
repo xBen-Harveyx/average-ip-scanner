@@ -2,7 +2,11 @@
 
 A small AdvancedIPScanner-style CLI for Windows. Run it on a machine connected
 to a network and it prints a table of live hosts on the **local subnet** with
-their hostname, IP, MAC address, and hardware manufacturer.
+their hostname, IP, MAC address, hardware manufacturer, and any open web ports.
+
+The open-port check is a lightweight TCP connect scan of live hosts, aimed at
+surfacing exposed web interfaces (router/admin panels, IoT device UIs) that may
+need to be locked down.
 
 It is built to run non-interactively through an RMM tool:
 
@@ -28,6 +32,15 @@ ais [flags]
 | `-timeout` | none | Overall scan timeout, e.g. `30s` or `5m` (default: no limit) |
 | `-progress` | `2s` | Interval between progress lines on stderr |
 | `-no-resolve` | off | Skip reverse-DNS hostname lookups |
+| `-ports` | `80,443,8000,8080,8443,8888` | Comma-separated TCP ports to check on live hosts; empty (`-ports ""`) disables port scanning |
+| `-audit` | off | Use a broader security-audit port set instead of the web default (see below); an explicit `-ports` overrides it |
+| `-port-timeout` | `1s` | Per-port connect timeout |
+
+The `-audit` preset scans remote-access, file-sharing, printing, and database
+ports in addition to web/admin panels:
+`21,22,23,80,139,443,445,1433,3306,3389,5432,5900,5985,5986,6379,8006,8080,8081,8443,8843,8880,8888,9000,9100,10000,27017`
+(FTP, SSH, Telnet, NetBIOS, SMB, MSSQL, MySQL, RDP, PostgreSQL, VNC, WinRM,
+Redis, Proxmox, UniFi, Portainer, JetDirect printing, Webmin, MongoDB).
 
 Examples:
 
@@ -40,6 +53,15 @@ ais.exe -range 192.168.1.0/24
 
 # Faster/quieter for large scans, capturing the table to a file
 ais.exe -range 10.0.0.0/24 -workers 100 -no-resolve > hosts.txt
+
+# Full security-audit port set (remote access, file sharing, databases, ...)
+ais.exe -range 192.168.1.0/24 -audit
+
+# Audit a custom set of ports (an explicit -ports overrides -audit)
+ais.exe -range 192.168.1.0/24 -ports 80,443,8080,8443,8006,10000
+
+# Inventory only, skip the port scan
+ais.exe -ports ""
 ```
 
 Ranges larger than a `/16` (65,536 addresses) are rejected as a safety guard.

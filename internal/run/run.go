@@ -9,6 +9,7 @@ import (
 	"github.com/ben/average-ip-scanner/internal/config"
 	"github.com/ben/average-ip-scanner/internal/output"
 	"github.com/ben/average-ip-scanner/internal/oui"
+	"github.com/ben/average-ip-scanner/internal/ports"
 	"github.com/ben/average-ip-scanner/internal/resolve"
 	"github.com/ben/average-ip-scanner/internal/scan"
 )
@@ -39,12 +40,20 @@ func Execute(ctx context.Context, cfg config.Config) error {
 
 	fmt.Fprintf(os.Stderr, "scanning %s (%d hosts)\n", cidr, len(ips))
 
+	var scanPorts func(context.Context, string) []int
+	if len(cfg.Ports) > 0 {
+		scanPorts = func(ctx context.Context, ip string) []int {
+			return ports.Open(ctx, ip, cfg.Ports, cfg.PortTimeout)
+		}
+	}
+
 	hosts := scan.Scan(ctx, ips, scan.Options{
 		Workers:          cfg.Workers,
 		ProgressInterval: cfg.ProgressInterval,
 		Resolve:          cfg.Resolve,
 		ResolveHost:      resolve.Lookup,
 		LookupVendor:     oui.Lookup,
+		ScanPorts:        scanPorts,
 	})
 
 	output.Print(os.Stdout, hosts)

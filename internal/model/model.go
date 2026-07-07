@@ -6,4 +6,5 @@ type Host struct {
 	Hostname     string
 	MAC          string // "aa:bb:cc:dd:ee:ff", empty if unresolved
 	Manufacturer string
+	OpenPorts    []int // open TCP ports found on the host, ascending; nil if port scanning is disabled
 }
