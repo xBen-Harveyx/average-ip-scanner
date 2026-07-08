@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ben/average-ip-scanner/internal/config"
-	"github.com/ben/average-ip-scanner/internal/output"
-	"github.com/ben/average-ip-scanner/internal/oui"
-	"github.com/ben/average-ip-scanner/internal/ports"
-	"github.com/ben/average-ip-scanner/internal/resolve"
-	"github.com/ben/average-ip-scanner/internal/scan"
+	"github.com/xBen-Harveyx/average-ip-scanner/internal/config"
+	"github.com/xBen-Harveyx/average-ip-scanner/internal/output"
+	"github.com/xBen-Harveyx/average-ip-scanner/internal/oui"
+	"github.com/xBen-Harveyx/average-ip-scanner/internal/ports"
+	"github.com/xBen-Harveyx/average-ip-scanner/internal/resolve"
+	"github.com/xBen-Harveyx/average-ip-scanner/internal/scan"
 )
 
 // Execute runs a scan described by cfg: it determines the target range, probes

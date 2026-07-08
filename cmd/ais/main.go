@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ben/average-ip-scanner/internal/config"
-	"github.com/ben/average-ip-scanner/internal/run"
+	"github.com/xBen-Harveyx/average-ip-scanner/internal/config"
+	"github.com/xBen-Harveyx/average-ip-scanner/internal/run"
 )
 
 func main() {

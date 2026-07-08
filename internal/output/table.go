@@ -8,7 +8,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/ben/average-ip-scanner/internal/model"
+	"github.com/xBen-Harveyx/average-ip-scanner/internal/model"
 )
 
 // Print writes hosts as a tab-aligned table. Empty cells render as "-".

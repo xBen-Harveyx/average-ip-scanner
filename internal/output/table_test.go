@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ben/average-ip-scanner/internal/model"
+	"github.com/xBen-Harveyx/average-ip-scanner/internal/model"
 )
 
 func TestPrint(t *testing.T) {

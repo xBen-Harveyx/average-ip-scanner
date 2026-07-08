@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ben/average-ip-scanner/internal/ports"
+	"github.com/xBen-Harveyx/average-ip-scanner/internal/ports"
 )
 
 const (
