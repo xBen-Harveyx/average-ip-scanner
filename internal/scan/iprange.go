@@ -58,9 +58,70 @@ func nextIP(ip net.IP) net.IP {
 	return next
 }
 
-// DetectLocalSubnet returns the CIDR of the first up, non-loopback interface
-// with a private IPv4 address. It is used when no explicit range is given.
+// DetectLocalSubnet returns the CIDR of the subnet this machine is actually on.
+//
+// It prefers the interface carrying the default route, which is what "the local
+// network" means on a machine with Hyper-V, WSL, VPN, or both Wi-Fi and
+// Ethernet attached. If that cannot be determined (no default route, or it
+// leads somewhere non-private), it falls back to the first up, non-loopback
+// interface with a private IPv4 address.
 func DetectLocalSubnet() (string, error) {
+	if cidr, err := defaultRouteSubnet(); err == nil {
+		return cidr, nil
+	}
+	return firstPrivateSubnet()
+}
+
+// defaultRouteSubnet asks the OS which local address it would use to reach an
+// off-link destination, then returns that interface's network.
+//
+// The UDP socket sends no packets and contacts nothing: a connected UDP socket
+// only forces a route lookup, and the destination is an RFC 5737 documentation
+// address that exists purely to represent "somewhere off this subnet".
+func defaultRouteSubnet() (string, error) {
+	conn, err := net.Dial("udp4", "192.0.2.1:9")
+	if err != nil {
+		return "", fmt.Errorf("no default route: %w", err)
+	}
+	defer conn.Close()
+
+	addr, ok := conn.LocalAddr().(*net.UDPAddr)
+	if !ok {
+		return "", errors.New("unexpected local address type")
+	}
+	local := addr.IP.To4()
+	if local == nil || !local.IsPrivate() {
+		return "", errors.New("default route does not leave from a private IPv4 address")
+	}
+	return subnetContaining(local)
+}
+
+// subnetContaining finds the interface holding target and returns its network.
+func subnetContaining(target net.IP) (string, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return "", fmt.Errorf("list interfaces: %w", err)
+	}
+	for _, iface := range ifaces {
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			ipNet, ok := addr.(*net.IPNet)
+			if !ok || !ipNet.IP.To4().Equal(target) {
+				continue
+			}
+			ones, _ := ipNet.Mask.Size()
+			return fmt.Sprintf("%s/%d", target.Mask(ipNet.Mask).String(), ones), nil
+		}
+	}
+	return "", fmt.Errorf("no interface holds %s", target)
+}
+
+// firstPrivateSubnet returns the CIDR of the first up, non-loopback interface
+// with a private IPv4 address.
+func firstPrivateSubnet() (string, error) {
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return "", fmt.Errorf("list interfaces: %w", err)

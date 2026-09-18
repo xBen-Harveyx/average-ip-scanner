@@ -43,3 +43,19 @@ func TestExpandCIDRErrors(t *testing.T) {
 		}
 	}
 }
+
+// The guard is a ceiling, not a fence: a /16 sits exactly at the limit and must
+// be allowed, while anything larger is refused.
+func TestExpandCIDRLimitBoundary(t *testing.T) {
+	ips, err := ExpandCIDR("10.0.0.0/16")
+	if err != nil {
+		t.Fatalf("a /16 sits at the limit and should be allowed: %v", err)
+	}
+	if want := 65534; len(ips) != want {
+		t.Errorf("a /16 yielded %d usable hosts, want %d", len(ips), want)
+	}
+
+	if _, err := ExpandCIDR("10.0.0.0/15"); err == nil {
+		t.Error("a /15 exceeds the limit and should be refused")
+	}
+}

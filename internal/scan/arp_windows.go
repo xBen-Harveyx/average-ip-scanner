@@ -4,7 +4,6 @@ package scan
 
 import (
 	"encoding/binary"
-	"fmt"
 	"net"
 	"syscall"
 	"unsafe"
@@ -45,16 +44,5 @@ func arpProbe(ip net.IP) (string, bool) {
 	if ret != 0 || macLen == 0 {
 		return "", false
 	}
-	return formatMAC(mac[:macLen]), true
-}
-
-func formatMAC(b []byte) string {
-	if len(b) == 0 {
-		return ""
-	}
-	s := fmt.Sprintf("%02x", b[0])
-	for _, c := range b[1:] {
-		s += fmt.Sprintf(":%02x", c)
-	}
-	return s
+	return net.HardwareAddr(mac[:macLen]).String(), true
 }

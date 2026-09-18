@@ -14,12 +14,12 @@ import (
 	"github.com/xBen-Harveyx/average-ip-scanner/internal/model"
 )
 
-const defaultWorkers = 50
-
-// Options controls a scan. The zero value is not valid; use sensible defaults
-// via New-style construction in the caller (see run.Execute).
+// Options controls a scan. The zero value is usable: Scan fills in defaults for
+// any unset field via withDefaults.
 type Options struct {
-	Workers          int
+	Workers int
+	// ProgressInterval is the gap between progress lines. Zero or less disables
+	// progress output entirely; the caller owns the default.
 	ProgressInterval time.Duration
 	Resolve          bool
 
@@ -28,13 +28,19 @@ type Options struct {
 	Probe        func(net.IP) (string, bool)                 // MAC + liveness; defaults to arpProbe
 	ResolveHost  func(ctx context.Context, ip string) string // reverse DNS; used when Resolve is true
 	LookupVendor func(mac string) string                     // OUI -> manufacturer
-	ScanPorts    func(ctx context.Context, ip string) []int  // open-port scan; skipped when nil
-	ProgressOut  io.Writer                                   // progress lines; defaults to os.Stderr
+	// ScanPorts probes a host's TCP ports, returning the open ones and whether
+	// the probe completed. Skipped when nil.
+	ScanPorts   func(ctx context.Context, ip string) ([]int, bool)
+	ProgressOut io.Writer // progress lines; defaults to os.Stderr
 }
 
 // Scan probes each IP concurrently and returns the hosts that responded to ARP,
-// sorted by IP address. Progress lines are written to Options.ProgressOut.
-func Scan(ctx context.Context, ips []net.IP, opts Options) []model.Host {
+// sorted by IP address, along with the number of addresses actually probed.
+//
+// A probed count below len(ips) means ctx was cancelled and the scan stopped
+// early, so the host list is partial. Callers are expected to check it rather
+// than assume a full sweep. Progress lines are written to Options.ProgressOut.
+func Scan(ctx context.Context, ips []net.IP, opts Options) (hosts []model.Host, probed int) {
 	opts = withDefaults(opts)
 
 	var (
@@ -66,7 +72,7 @@ func Scan(ctx context.Context, ips []net.IP, opts Options) []model.Host {
 					host.Hostname = opts.ResolveHost(ctx, host.IP)
 				}
 				if opts.ScanPorts != nil {
-					host.OpenPorts = opts.ScanPorts(ctx, host.IP)
+					host.OpenPorts, host.PortsScanned = opts.ScanPorts(ctx, host.IP)
 				}
 				results <- host
 			}
@@ -91,45 +97,50 @@ func Scan(ctx context.Context, ips []net.IP, opts Options) []model.Host {
 		close(results)
 	}()
 
-	// Progress reporter ticks until told to stop.
+	// Progress reporter ticks until told to stop. When progress output is
+	// disabled the goroutine never starts, so no ticker is created.
+	reportProgress := opts.ProgressInterval > 0
 	stop := make(chan struct{})
 	progressExited := make(chan struct{})
-	go func() {
-		defer close(progressExited)
-		ticker := time.NewTicker(opts.ProgressInterval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				fmt.Fprintf(opts.ProgressOut, "scanned %d/%d (%d alive)\n", done.Load(), total, alive.Load())
-			case <-stop:
-				return
+	if reportProgress {
+		go func() {
+			defer close(progressExited)
+			ticker := time.NewTicker(opts.ProgressInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					fmt.Fprintf(opts.ProgressOut, "scanned %d/%d (%d alive)\n", done.Load(), total, alive.Load())
+				case <-stop:
+					return
+				}
 			}
-		}
-	}()
+		}()
+	}
 
-	var hosts []model.Host
 	for host := range results {
 		hosts = append(hosts, host)
 	}
 
 	// Stop the ticker, wait for it to exit, then print a definitive final line.
-	close(stop)
-	<-progressExited
-	fmt.Fprintf(opts.ProgressOut, "scanned %d/%d (%d alive)\n", done.Load(), total, alive.Load())
+	if reportProgress {
+		close(stop)
+		<-progressExited
+		fmt.Fprintf(opts.ProgressOut, "scanned %d/%d (%d alive)\n", done.Load(), total, alive.Load())
+	}
 
 	sort.Slice(hosts, func(i, j int) bool {
 		return compareIP(hosts[i].IP, hosts[j].IP) < 0
 	})
-	return hosts
+	return hosts, int(done.Load())
 }
 
 func withDefaults(opts Options) Options {
+	// A guard, not a default: the user-facing default lives with the flag in
+	// the config package. Zero workers would consume no jobs and quietly
+	// return an empty result, which is worse than a slow scan.
 	if opts.Workers <= 0 {
-		opts.Workers = defaultWorkers
-	}
-	if opts.ProgressInterval <= 0 {
-		opts.ProgressInterval = 2 * time.Second
+		opts.Workers = 1
 	}
 	if opts.Probe == nil {
 		opts.Probe = arpProbe
