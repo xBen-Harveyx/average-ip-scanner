@@ -52,7 +52,17 @@ var Audit = []int{
 
 // Open returns the subset of ports on ip that accept a TCP connection, sorted
 // ascending. Each port is probed concurrently with its own timeout.
-func Open(ctx context.Context, ip string, ports []int, timeout time.Duration) []int {
+//
+// The second return value reports whether the probe ran to completion. It is
+// false when ctx was cancelled before or during the scan, in which case the
+// port list is unreliable: a cancelled context makes every dial fail
+// immediately, which is indistinguishable from a closed port. Callers must not
+// treat an incomplete result as "nothing open".
+func Open(ctx context.Context, ip string, ports []int, timeout time.Duration) ([]int, bool) {
+	if ctx.Err() != nil {
+		return nil, false
+	}
+
 	var (
 		mu   sync.Mutex
 		open []int
@@ -71,8 +81,11 @@ func Open(ctx context.Context, ip string, ports []int, timeout time.Duration) []
 	}
 	wg.Wait()
 
+	if ctx.Err() != nil {
+		return nil, false
+	}
 	sort.Ints(open)
-	return open
+	return open, true
 }
 
 func dialOpen(ctx context.Context, ip string, port int, timeout time.Duration) bool {

@@ -23,15 +23,16 @@ func TestOpenDetectsListeningPort(t *testing.T) {
 	closedPort := ln2.Addr().(*net.TCPAddr).Port
 	ln2.Close()
 
-	got := Open(context.Background(), "127.0.0.1", []int{openPort, closedPort}, time.Second)
-
+	got, ok := Open(context.Background(), "127.0.0.1", []int{openPort, closedPort}, time.Second)
+	if !ok {
+		t.Fatal("Open reported incomplete on an uncancelled context")
+	}
 	if len(got) != 1 || got[0] != openPort {
 		t.Fatalf("Open = %v, want [%d]", got, openPort)
 	}
 }
 
 func TestOpenSortsResults(t *testing.T) {
-	var listeners []net.Listener
 	var wantPorts []int
 	for i := 0; i < 3; i++ {
 		ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -39,11 +40,13 @@ func TestOpenSortsResults(t *testing.T) {
 			t.Fatalf("listen: %v", err)
 		}
 		defer ln.Close()
-		listeners = append(listeners, ln)
 		wantPorts = append(wantPorts, ln.Addr().(*net.TCPAddr).Port)
 	}
 
-	got := Open(context.Background(), "127.0.0.1", wantPorts, time.Second)
+	got, ok := Open(context.Background(), "127.0.0.1", wantPorts, time.Second)
+	if !ok {
+		t.Fatal("Open reported incomplete on an uncancelled context")
+	}
 	if len(got) != 3 {
 		t.Fatalf("Open returned %d ports, want 3", len(got))
 	}
@@ -51,5 +54,28 @@ func TestOpenSortsResults(t *testing.T) {
 		if got[i-1] > got[i] {
 			t.Errorf("results not sorted ascending: %v", got)
 		}
+	}
+}
+
+// A cancelled context makes every dial fail instantly, which is
+// indistinguishable from a closed port. Open must report that as incomplete
+// rather than as an empty (clean) result.
+func TestOpenReportsIncompleteOnCancelledContext(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+	openPort := ln.Addr().(*net.TCPAddr).Port
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	got, ok := Open(ctx, "127.0.0.1", []int{openPort}, time.Second)
+	if ok {
+		t.Errorf("Open reported complete on a cancelled context (got %v)", got)
+	}
+	if got != nil {
+		t.Errorf("Open = %v, want nil on a cancelled context", got)
 	}
 }
